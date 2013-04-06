@@ -1,0 +1,18 @@
+This is a primitive disassembler for KS10 microcode.
+
+Build and execute like so:
+	make
+	./udis < ram.262
+
+By default, microinstructions are disassembled in the order they
+appear in memory.  However, by #defining PROGRAM_ORDER in udis.c, the
+disassembler will follow the J field.  Also, I've tried to dissassemble
+instructions that may be skipped to by means of the SKIP field, though
+I'm not sure if I got it right.
+
+The files mcr.262 and ram.262 are the ITS KS10 microcode assembler
+listing, and binary RAM file, respectively.  source.262 is the
+microcode source code, reconstructed from mcr.262.
+
+There is no support for KL10 microcode, though it should be possible
+to add without too much hassle.
