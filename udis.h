@@ -7,21 +7,23 @@ union bits
   struct { int dummy; int *list; } list;
 };
 
+struct ks10_uinsn
+{
+  int field[100];
+  int done;
+};
+
 struct field
 {
   char *name;
+  int (*print_field) (int, struct ks10_uinsn *);
   union bits bits;
   int def_ault;
   char **names;
 };
 
-struct ks10_uinsn
-{
-  int field[29];
-  int done;
-};
-
 extern struct field fields[];
 extern int field_num;
 
-extern void udis (int, unsigned char [RAM_SIZE][WORD_SIZE], int *);
+extern void udis (int, unsigned char [RAM_SIZE][WORD_SIZE]);
+extern int get_field (char *name, struct ks10_uinsn *insn);

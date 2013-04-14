@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "udis.h"
 
 #define PROGRAM_ORDER
@@ -43,43 +44,43 @@ bits (unsigned char *word, union bits *bits)
 
 static void
 disassemble (unsigned char word[RAM_SIZE][WORD_SIZE],
+	     int length,
 	     struct ks10_uinsn *ram)
 {
   int i, address;
 
-  for (address = 0; address < RAM_SIZE; address)
+  for (address = 0; address < length; address++)
     {
       for (i = 0; i < field_num; i++)
-	{
-	  int value = bits (word, &fields[i].bits);
-
-	  ((int *)&ram[address])[fields[i].field_index] = value;
-	}
+	ram[address].field[i] = bits (word[address], &fields[i].bits);
     }
 }
 
 static void
-print (int address, ks10_uinsn *insn)
+print (int address, int print_J, struct ks10_uinsn *insn)
 {
-  int i, n;
+  int i, n, printed = 0;
 
   if (address >= 0)
     printf ("%04o:", address);
   putchar ('\t');
 
   n = 0;
-  LSRC = -1;
   for (i = 0; i < field_num; i++)
     {
-      int value = bits (word, &fields[i].bits);
+      int value = insn->field[i];
 
-	}
+      if (fields[i].name[0] == ' ')
+	continue;
+      if (strcmp (fields[i].name, "J") == 0 && !print_J)
+	continue;
 
       if (value != fields[i].def_ault &&
 	  !(strcmp (fields[i].name, "RSRC") == 0 &&
-	    value == LSRC))
+	    value == get_field ("LSRC", insn)) &&
+	  fields[i].print_field (i, insn))
 	{
-	  if (i > 0)
+	  if (printed)
 	    n += printf (", ");
 
 	  if (n >= 40)
@@ -93,6 +94,8 @@ print (int address, ks10_uinsn *insn)
 	    n += printf ("%s", fields[i].names[value]);
 	  else
 	    n += printf ("%o", value);
+
+	  printed = 1;
 	}
     }
 
@@ -100,13 +103,13 @@ print (int address, ks10_uinsn *insn)
 }
 
 void
-udis (int length, unsigned char word[RAM_SIZE][WORD_SIZE], int *word_done)
+udis (int length, unsigned char word[RAM_SIZE][WORD_SIZE])
 {
   int address;
   int words_done;
   int print_address = 1;
 
-  disassemble (word, &ram);
+  disassemble (word, length, ram);
 
 #ifdef PROGRAM_ORDER
   address = 0;
@@ -116,31 +119,41 @@ udis (int length, unsigned char word[RAM_SIZE][WORD_SIZE], int *word_done)
   for (address = 0; address < length; address++)
 #endif
     {
-      print (print_address ? address : -1, &ram[address]);
+      print (print_address ? address : -1,
+	     ram[get_field ("J", &ram[address])].done,
+	     &ram[address]);
       words_done++;
-      word_done[address] = 1;
+      ram[address].done = 1;
 
 #ifdef PROGRAM_ORDER
-      if (SKIP != 070 && !word_done[J])
+      if (get_field ("SKIP", &ram[address]) != 070)
 	{
-	  int skip_J, skip_SKIP;
-	  disassemble (J, word[J], &skip_J, &skip_SKIP);
-	  words_done++;
-	  word_done[J] = 1;
-	  J++;
-	  if (word_done[J])
-	    J = skip_J;
+	  int new_address = get_field ("J", &ram[address]);
+	  if (!ram[new_address].done)
+	    {
+	      printf ("=0\n");
+	      print (new_address, 1, &ram[new_address]);
+	      words_done++;
+	      ram[new_address].done = 1;
+	      address = new_address + 1;
+	      if (ram[address].done)
+		address = get_field ("J", &ram[new_address]);
+	      continue;
+	    }
 	}
 #endif
 
+      address = get_field ("J", &ram[address]);
+      print_address = 0;
+
 #ifdef PROGRAM_ORDER
-      if (word_done[J])
+      if (ram[address].done)
 	{
 	  int i;
 	  address = -1;
 	  for (i = 0; i < length; i++)
 	    {
-	      if (!word_done[i])
+	      if (!ram[i].done)
 		{
 		  address = i;
 		  print_address = 1;
@@ -149,11 +162,6 @@ udis (int length, unsigned char word[RAM_SIZE][WORD_SIZE], int *word_done)
 	    }
 	  if (address == -1 && words_done < length)
 	    abort ();
-	}
-      else
-	{
-	  address = J;
-	  print_address = 0;
 	}
 #endif
     }
